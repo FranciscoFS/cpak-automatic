@@ -115,6 +115,8 @@ Cada `git push` a `main` redespliega automáticamente.
 | Síntoma | Causa probable | Solución |
 | :--- | :--- | :--- |
 | El build descarga varios GB | Falta la línea `--extra-index-url` | Debe ser la **primera** línea de `requirements.txt` |
+| `E: Unable to locate package #` | `packages.txt` con comentarios | **Una línea = un nombre de paquete.** Sin `#`, sin comentarios |
+| `E: Unable to locate package libglib2.0-0` | Debian 13 (trixie) lo renombró por la transición *time_t* | Usa `libglib2.0-0t64`; el nombre antiguo ya no existe en trixie |
 | `ImportError: libGL.so.1` | Falta `packages.txt` | Verifica que esté en la **raíz** del repo |
 | `ImportError: libgthread-2.0.so.0` | Falta libglib | `libglib2.0-0` en `packages.txt` |
 | `ModuleNotFoundError: ultralytics` | No encontró el `requirements.txt` | Debe estar en la raíz del repo (o junto al entrypoint) |

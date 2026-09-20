@@ -1,7 +1,5 @@
-# Paquetes apt del sistema (Streamlit Community Cloud los instala).
-# OpenCV (dependencia de ultralytics) necesita libGL y libglib en Debian.
 libgl1
-libglib2.0-0
+libglib2.0-0t64
 libsm6
 libxext6
 libxrender1

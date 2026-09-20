@@ -4,12 +4,15 @@
 FROM python:3.10-slim
 
 # --- Librerías del sistema que necesita OpenCV (dependencia de ultralytics) ---
+# Debian 13 (trixie) renombró libglib2.0-0 -> libglib2.0-0t64 (transición time_t),
+# por eso se intenta el nombre nuevo y se cae al antiguo para otras versiones.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
-        libglib2.0-0 \
         libsm6 \
         libxext6 \
         libxrender1 \
+    && ( apt-get install -y --no-install-recommends libglib2.0-0t64 \
+         || apt-get install -y --no-install-recommends libglib2.0-0 ) \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Usuario no-root (recomendado por Spaces para evitar problemas de permisos) ---

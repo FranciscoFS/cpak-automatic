@@ -1,0 +1,21 @@
+# ---------------------------------------------------------------------------
+# CPAK Automatic — dependencias para despliegue (CPU)
+# ---------------------------------------------------------------------------
+# PyTorch CPU-only: el índice +cpu evita descargar los wheels CUDA (~2.5 GB)
+# que no se usan en el Space (solo hay CPU).
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- Inferencia ---
+torch==2.10.0+cpu
+torchvision==0.25.0+cpu
+ultralytics>=8.3.0
+
+# --- App ---
+streamlit==1.57.0
+streamlit-drawable-canvas
+Pillow
+numpy
+pandas
+
+# NOTA: no se lista opencv-python porque ultralytics ya lo trae como dependencia.
+# El Space necesita libGL del sistema: ver packages.txt

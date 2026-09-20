@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.git/
+.gitattributes
+.gitignore
+.ipynb_checkpoints/
+*.log
+visualizations/
+.DS_Store
+Thumbs.db

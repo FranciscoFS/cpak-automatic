@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# Salidas temporales de la app
+visualizations/
+/tmp/
+*.log
+
+# Secretos (nunca subir)
+.streamlit/secrets.toml
+.env
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IMPORTANTE: NO ignorar `scripts/` ni `training_runs/*/weights/best.pt`
+# (son necesarios para que el Space funcione)

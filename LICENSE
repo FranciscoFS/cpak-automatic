@@ -1,0 +1,37 @@
+CPAK Automatic — Automated Coronal Alignment Measurement
+Copyright (C) 2026 Francisco Fernandez, Raúl Zilleruelo, Joaquín Steinsapir,
+Catalina Vidal, Cristian Ruz, Pablo Besa.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+--------------------------------------------------------------------------
+WHY AGPL-3.0
+--------------------------------------------------------------------------
+This project uses Ultralytics YOLO, which is licensed under AGPL-3.0. Under
+section 13 of the AGPL, if you run a modified version of this software on a
+server and let other users communicate with it there, you must offer those
+users the opportunity to receive the Corresponding Source.
+
+If AGPL-3.0 does not fit your organisation's requirements, Ultralytics offers a
+commercial license: https://www.ultralytics.com/license
+
+--------------------------------------------------------------------------
+FULL LICENSE TEXT
+--------------------------------------------------------------------------
+The complete text of the GNU Affero General Public License v3.0 is not
+reproduced here to keep the repository readable. Download it with:
+
+    curl -o LICENSE-full.txt https://www.gnu.org/licenses/agpl-3.0.txt
+
+It is recommended to commit `LICENSE-full.txt` alongside this file so the Space
+is fully self-contained for license-compliance purposes.

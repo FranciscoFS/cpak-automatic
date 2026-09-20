@@ -7,7 +7,7 @@ landmarks, and computes the femorotibial angles used in knee surgery planning.
 ## What it computes
 
 | Metric | Description |
-|:---|:---|
+| :--- | :--- |
 | **HKA** | Hip-Knee-Ankle angle |
 | **mLDFA** | Mechanical lateral distal femoral angle |
 | **mMPTA** | Mechanical medial proximal tibial angle |
@@ -31,7 +31,7 @@ landmarks, and computes the femorotibial angles used in knee surgery planning.
 ## Model
 
 | Stage | Architecture | Training data |
-|:---|:---|:---|
+| :--- | :--- | :--- |
 | Joint detection | YOLO (open source) | 280 radiographs (80/20 split) |
 | Landmark localization | YOLO pose (fine-tuned) | 1,734 anatomical crops |
 
@@ -44,7 +44,7 @@ Validated against two expert surgeons on **112 limbs from 57 LLR**, independent
 of training.
 
 | Metric | Agreement with experts (ICC[2,1]) | 95% CI | Bias |
-|:---|:---:|:---:|:---:|
+| :--- | :---: | :---: | :---: |
 | HKA | 0.995 | 0.99–1.00 | +0.20° |
 | mLDFA | 0.873 | 0.83–0.91 | −0.15° |
 | mMPTA | 0.873 | 0.80–0.92 | −0.81° |

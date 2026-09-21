@@ -106,7 +106,31 @@ primera vez). Luego prueba:
 2. Pegar una captura con `Ctrl+V`.
 3. Presionar **▶ Ejecutar inferencia** y revisar métricas + overlay.
 
-Cada `git push` a `main` redespliega automáticamente.
+Cada `git push` a `main` redespliega automáticamente:
+
+- Cambios de **código / docs** → actualización en caliente (**segundos**).
+- Cambios en `requirements.txt` o `packages.txt` → **redeploy completo** (varios minutos).
+
+---
+
+## 3b. Flujo de trabajo: mantener la app actualizada
+
+⚠️ **Hay dos repositorios y la app solo lee de éste (`cpak-automatic`).** Si editas
+la app en el repo de investigación (`CPAK_automatic`), la web **no** cambia hasta
+que copies los archivos aquí y hagas `push`.
+
+Para no olvidarlo, hay un script en el repo de investigación:
+
+```powershell
+# desde la raíz del proyecto de investigación (CPAK)
+powershell -File scripts\sync_to_deploy.ps1
+# o con un mensaje propio:
+powershell -File scripts\sync_to_deploy.ps1 -Message "Mejora del overlay"
+```
+
+El script copia `scripts/30_streamlit_app.py` y `scripts/13_final_inference.py`
+a `deploy_app/scripts/`, verifica que la copia sea idéntica (SHA-256) y hace
+commit + push. Si no hay cambios, lo indica y no hace nada.
 
 ---
 

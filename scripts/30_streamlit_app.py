@@ -215,7 +215,8 @@ st.markdown(
 # Load pipeline module (cached for lifetime of server)
 # ---------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Cargando pipeline…")
-def load_pipeline():
+def load_pipeline(pipeline_mtime_ns: int, geometry_mtime_ns: int):
+    # File versions invalidate a cached module after a pipeline/geometry update.
     if not PIPELINE_PATH.exists():
         raise FileNotFoundError(f"Pipeline no encontrado: {PIPELINE_PATH}")
     spec = importlib.util.spec_from_file_location("cpak_pipeline", str(PIPELINE_PATH))
@@ -236,7 +237,10 @@ def load_pose_model(path: str):
     return pipeline.YOLO(path)
 
 
-pipeline = load_pipeline()
+pipeline = load_pipeline(
+    PIPELINE_PATH.stat().st_mtime_ns,
+    PIPELINE_PATH.with_name("hka_geometry.py").stat().st_mtime_ns,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -771,7 +775,7 @@ if st.session_state.ran_once and st.session_state.payload is not None:
                                 # Recalcular métricas
                                 all_pts = new_payload.get("sides", {}).get(z_side, {}).get("points", {})
                                 pts_for_calc = {int(k): v for k, v in all_pts.items()}
-                                new_metrics = pipeline.calculate_metrics(pts_for_calc)
+                                new_metrics = pipeline.calculate_metrics(pts_for_calc, z_side)
                                 new_payload["sides"][z_side]["metrics"] = new_metrics
 
                                 # Guardar

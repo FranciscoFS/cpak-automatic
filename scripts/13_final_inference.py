@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -9,6 +10,16 @@ from ultralytics import YOLO
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+# Load the sibling module explicitly: this pipeline is also loaded by path
+# through importlib from Streamlit and other scripts.
+_hka_spec = importlib.util.spec_from_file_location(
+    "cpak_hka_geometry", Path(__file__).with_name("hka_geometry.py")
+)
+if _hka_spec is None or _hka_spec.loader is None:
+    raise ImportError("No se pudo cargar hka_geometry.py")
+_hka_geometry = importlib.util.module_from_spec(_hka_spec)
+_hka_spec.loader.exec_module(_hka_geometry)
+signed_hka_from_axes = _hka_geometry.signed_hka_from_axes
 DEFAULT_DET_MODEL = BASE_DIR / "training_runs" / "telerx_yolo26s_768_b12-4" / "weights" / "best.pt"
 DEFAULT_POSE_MODEL = BASE_DIR / "training_runs" / "telerx_pose_v2_ft" / "weights" / "best.pt"
 DEFAULT_OUTPUT_DIR = BASE_DIR / "visualizations" / "final_pipeline"
@@ -525,7 +536,7 @@ def classify_cpak_type(ahka_class: str, jlo_class: str) -> str:
     return _CPAK_TYPE_GRID.get((ahka_class, jlo_class), "?")
 
 
-def calculate_metrics(points):
+def calculate_metrics(points, side):
     missing = [idx for idx in REQUIRED_METRIC_POINTS if idx not in points]
     if missing:
         return {"status": "incomplete", "missing_points": missing}
@@ -548,13 +559,11 @@ def calculate_metrics(points):
     ahka = mpta - ldfa
     jlo = mpta + ldfa
 
-    # HKA angular real (no aritmético): ángulo entre eje femoral P0->P7 y eje tibial P1->P2
-    hka = line_angle_deg(points[0], points[7], points[1], points[2])
-    if hka is None:
-        return {"status": "invalid_geometry"}
-    # Asignar signo según aHKA: negativo = varo, positivo = valgo
-    if ahka < 0:
-        hka = -hka
+    # Magnitude and sign come from the axes and anatomical side, never aHKA.
+    try:
+        hka = signed_hka_from_axes(points, side)
+    except ValueError as exc:
+        return {"status": "invalid_geometry", "reason": str(exc)}
     
     # Línea de Mikulicz: desde P0 (Cabeza Femoral) a P2 (Centro Tobillo)
     p0 = points[0]  # Cabeza Femoral
@@ -572,7 +581,9 @@ def calculate_metrics(points):
         "LDFA_mode": "EXTERNAL_FIXED",
         "MPTA": round(mpta, 3),
         "HKA": round(hka, 3),
-        "HKA_definition": "ANGULO_ENTRE_EJES_CON_SIGNO_NEGATIVO_VARO_POSITIVO_VALGO",
+        "HKA_definition": "ANGULO_ORIENTADO_P0_P7_P1_P2_NEGATIVO_VARO_POSITIVO_VALGO",
+        "HKA_sign_method": "ORIENTED_AXES_WITH_ANATOMICAL_SIDE",
+        "HKA_side": side,
         "aHKA": round(ahka, 3),
         "aHKA_formula": AHKA_FORMULA,
         "JLO": round(jlo, 3),
@@ -883,7 +894,7 @@ def process_image(
 
     for side_name, side_detections in sides.items():
         points, crops = build_side_points(image, side_detections, pose_model, pose_conf, padding)
-        metrics = calculate_metrics(points)
+        metrics = calculate_metrics(points, side_name)
         result_payload["sides"][side_name] = {
             "detections_found": sorted(side_detections.keys()),
             "points": {str(idx): [round(pt[0], 2), round(pt[1], 2)] for idx, pt in points.items()},

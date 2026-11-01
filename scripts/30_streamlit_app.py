@@ -5,6 +5,7 @@ Análisis clínico de alineación femoral (LDFA, MPTA, aHKA, JLO).
 Launch:
     conda run -n physis_seg streamlit run scripts/30_streamlit_app.py
 """
+import base64
 import importlib.util
 import json
 import os
@@ -321,6 +322,33 @@ def fit_for_display(image, max_side: int = 1600):
     scale_factor = max_side / float(longest)
     new_size = (max(1, int(width * scale_factor)), max(1, int(height * scale_factor)))
     return image.resize(new_size, Image.LANCZOS)
+
+
+def image_as_html(image, max_side: int = 1400, quality: int = 85) -> str:
+    """Devuelve la imagen como <img> con data-URI.
+
+    Evita el endpoint /media/ de Streamlit: si ese endpoint falla (HTTP 500 en
+    el despliegue), la imagen se sigue viendo porque viaja dentro del propio HTML.
+    """
+    small = fit_for_display(image, max_side=max_side)
+    buffer = BytesIO()
+    small.save(buffer, format="JPEG", quality=quality)
+    payload = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return (
+        '<img src="data:image/jpeg;base64,' + payload + '" '
+        'style="width:100%;height:auto;border-radius:10px;display:block;" />'
+    )
+
+
+def download_link_html(data: bytes, filename: str, mime: str, label: str) -> str:
+    """Enlace de descarga con data-URI, sin pasar por /media/."""
+    payload = base64.b64encode(data).decode("ascii")
+    return (
+        f'<a href="data:{mime};base64,{payload}" download="{filename}" '
+        'style="display:block;text-align:center;padding:.45rem .8rem;'
+        'border:1px solid #e2e6ec;border-radius:999px;text-decoration:none;'
+        f'font-weight:600;color:#307DE2;margin:.25rem 0;">{label}</a>'
+    )
 
 
 def cpak_color(cpak: str) -> str:
@@ -684,7 +712,7 @@ if st.session_state.ran_once and st.session_state.payload is not None:
     # ── Imagen central ─────────────────────────────────────────────────────
     with col_center:
         st.markdown("### 🖼️ Overlay")
-        st.image(fit_for_display(overlay), use_container_width=True)
+        st.markdown(image_as_html(overlay), unsafe_allow_html=True)
 
         # Zoom por articulación
         with st.expander("🔍 Zoom por articulación", expanded=st.session_state.get("zoom_edit_mode", False)):
@@ -839,11 +867,8 @@ if st.session_state.ran_once and st.session_state.payload is not None:
                                 st.success("✅ Puntos guardados y métricas recalculadas.")
                                 st.rerun()
                 else:
-                    st.image(
-                        fit_for_display(crop_points_display),
-                        caption=f"{z_side} · {z_joint} ({len(local_points)} pts)",
-                        use_container_width=True,
-                    )
+                    st.markdown(image_as_html(crop_points_display), unsafe_allow_html=True)
+                    st.caption(f"{z_side} · {z_joint} ({len(local_points)} pts)")
             else:
                 st.info(f"No se detectó {z_joint} ({z_side})")
 
@@ -879,22 +904,18 @@ if st.session_state.ran_once and st.session_state.payload is not None:
         st.markdown("**Descargas**")
 
         json_bytes = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
-        st.download_button(
-            "📥 JSON métricas",
-            data=json_bytes,
-            file_name="cpak_metrics.json",
-            mime="application/json",
-            use_container_width=True,
+        st.markdown(
+            download_link_html(json_bytes, "cpak_metrics.json", "application/json",
+                               "📥 JSON métricas"),
+            unsafe_allow_html=True,
         )
 
         img_bytes = BytesIO()
         fit_for_display(overlay, max_side=2400).save(img_bytes, format="JPEG", quality=92)
-        st.download_button(
-            "🖼️ Overlay JPG",
-            data=img_bytes.getvalue(),
-            file_name="cpak_overlay.jpg",
-            mime="image/jpeg",
-            use_container_width=True,
+        st.markdown(
+            download_link_html(img_bytes.getvalue(), "cpak_overlay.jpg", "image/jpeg",
+                               "🖼️ Overlay JPG"),
+            unsafe_allow_html=True,
         )
 
         st.markdown("---")

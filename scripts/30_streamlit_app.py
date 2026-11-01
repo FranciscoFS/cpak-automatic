@@ -306,6 +306,23 @@ def fmt(v, d=2):
     return "N/A" if v is None else f"{v:.{d}f}"
 
 
+def fit_for_display(image, max_side: int = 1600):
+    """Reduce la imagen antes de mostrarla.
+
+    La telerradiografía completa puede tener ~19 MP; enviarla entera a /media
+    consume memoria y peso innecesarios en el contenedor.
+    """
+    if image is None:
+        return image
+    width, height = image.size
+    longest = max(width, height)
+    if longest <= max_side:
+        return image
+    scale_factor = max_side / float(longest)
+    new_size = (max(1, int(width * scale_factor)), max(1, int(height * scale_factor)))
+    return image.resize(new_size, Image.LANCZOS)
+
+
 def cpak_color(cpak: str) -> str:
     if "Varo" in cpak:
         return "#e06c75"
@@ -544,6 +561,14 @@ if run_btn:
     if uploaded is None:
         st.error("Carga una imagen Rx primero.")
     else:
+        # Libera la imagen temporal de la corrida anterior.
+        previous_path = st.session_state.get("image_path")
+        if previous_path is not None:
+            try:
+                Path(previous_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded.name).suffix) as tmp:
             tmp.write(uploaded.read())
             tmp_path = Path(tmp.name)
@@ -553,7 +578,7 @@ if run_btn:
                 det_model = load_det_model(det_path)
                 pose_model = load_pose_model(pose_path)
                 out_dir = Path(tempfile.gettempdir()) / "cpak_streamlit"
-                _, _, payload = pipeline.process_image(
+                _, json_path, payload = pipeline.process_image(
                     det_model=det_model,
                     pose_model=pose_model,
                     image_path=tmp_path,
@@ -563,7 +588,16 @@ if run_btn:
                     padding=padding,
                     draw_boxes=show_boxes,
                     draw_axes=show_axes,
+                    json_only=True,
                 )
+
+            # El JSON y el overlay en disco no se usan: la app re-renderiza desde
+            # el payload en sesión. Se borran para no llenar el disco del contenedor,
+            # que es lo que provoca errores 500 al servir imágenes.
+            try:
+                Path(json_path).unlink(missing_ok=True)
+            except OSError:
+                pass
             st.session_state.payload = payload
             st.session_state.image_path = tmp_path
             st.session_state.ran_once = True
@@ -650,7 +684,7 @@ if st.session_state.ran_once and st.session_state.payload is not None:
     # ── Imagen central ─────────────────────────────────────────────────────
     with col_center:
         st.markdown("### 🖼️ Overlay")
-        st.image(overlay, use_container_width=True)
+        st.image(fit_for_display(overlay), use_container_width=True)
 
         # Zoom por articulación
         with st.expander("🔍 Zoom por articulación", expanded=st.session_state.get("zoom_edit_mode", False)):
@@ -806,7 +840,7 @@ if st.session_state.ran_once and st.session_state.payload is not None:
                                 st.rerun()
                 else:
                     st.image(
-                        crop_points_display,
+                        fit_for_display(crop_points_display),
                         caption=f"{z_side} · {z_joint} ({len(local_points)} pts)",
                         use_container_width=True,
                     )
@@ -854,7 +888,7 @@ if st.session_state.ran_once and st.session_state.payload is not None:
         )
 
         img_bytes = BytesIO()
-        overlay.save(img_bytes, format="JPEG", quality=92)
+        fit_for_display(overlay, max_side=2400).save(img_bytes, format="JPEG", quality=92)
         st.download_button(
             "🖼️ Overlay JPG",
             data=img_bytes.getvalue(),

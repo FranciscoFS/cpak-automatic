@@ -654,8 +654,12 @@ if st.session_state.ran_once and st.session_state.payload is not None:
         izq_offset_xy=(izq_offset_x, izq_offset_y),
     )
 
-    # ── Layout: métricas | imagen | controles ──
-    col_left, col_center, col_right = st.columns([1, 2.2, 1], gap="large")
+    # ── Overlay a ancho completo ──────────────────────────────
+    st.markdown("### 🖼️ Overlay")
+    st.markdown(image_as_html(overlay, max_side=1800), unsafe_allow_html=True)
+
+    # ── Layout: métricas | zoom | controles ──
+    col_left, col_center, col_right = st.columns([1.5, 1.6, 1], gap="large")
 
     # ── Métricas ──────────────────────────────────────────────────────────
     with col_left:
@@ -711,8 +715,6 @@ if st.session_state.ran_once and st.session_state.payload is not None:
 
     # ── Imagen central ─────────────────────────────────────────────────────
     with col_center:
-        st.markdown("### 🖼️ Overlay")
-        st.markdown(image_as_html(overlay), unsafe_allow_html=True)
 
         # Zoom por articulación
         with st.expander("🔍 Zoom por articulación", expanded=st.session_state.get("zoom_edit_mode", False)):

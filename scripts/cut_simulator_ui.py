@@ -168,71 +168,79 @@ def render_simulator(image: np.ndarray, payload: dict, mm_per_px: Optional[float
         st.info("Corre la inferencia para obtener los puntos.")
         return
 
-    # ------------------------- barra de controles -------------------------
-    bar = st.container(horizontal=True, vertical_alignment="center", gap="medium")
-    with bar:
+    # --------------------- layout: imagen | controles ---------------------
+    col_img, col_ctrl = st.columns([2.2, 1], gap="large")
+
+    with col_ctrl:
         side_opts = list(sides_found.keys())
         side = st.pills("Lado", side_opts, default=side_opts[0],
                         label_visibility="collapsed", key=f"{key}_side") or side_opts[0]
-        invert_ml = st.toggle("Invertir M/L", value=False, key=f"{key}_inv")
-        show_axes = st.toggle("Ejes mecánicos", value=False, key=f"{key}_axes",
-                              help="Eje mecánico de cada hueso en gris punteado.")
-        open_calib = st.button("Calibración", icon="📏", key=f"{key}_calib_btn",
+        c_inv, c_ax = st.columns(2)
+        invert_ml = c_inv.toggle("Invertir M/L", value=False, key=f"{key}_inv")
+        show_axes = c_ax.toggle("Ejes", value=False, key=f"{key}_axes",
+                                help="Eje mecanico de cada hueso en gris punteado.")
+        open_calib = st.button("Calibracion", icon="📏", width="stretch",
+                               key=f"{key}_calib_btn",
                                help="Ver el recorte con los puntos que definen la escala.")
         pivot_mode = "Mecanico"
 
-    with st.expander("Calibración y visualización", expanded=False):
-        c1, c2, c3 = st.columns(3)
-        if mm_per_px:
-            c1.caption(f"DICOM · {mm_per_px:.4f} mm/px")
-            use_mm, ref_bone, ref_width_mm = True, None, None
-        else:
-            use_mm = c1.toggle("Escala aproximada", value=True, key=f"{key}_usemm")
-            ref_bone = c2.radio("Hueso de referencia", ("Tibia", "Fémur"),
-                                horizontal=True, key=f"{key}_refbone") if use_mm else None
-            ref_width_mm = c3.number_input("Ancho de referencia (mm)", 20.0, 140.0, 80.0, 1.0,
-                                           key=f"{key}_refw") if use_mm else None
-        c4, c5, c6 = st.columns(3)
-        style_label = c4.selectbox(
-            "Estilo",
-            ("Línea (radiografía)", "Limpio (solo líneas)", "Blueprint (gris suave)",
-             "Diagrama (fondo blanco)"),
-            key=f"{key}_style",
-        )
-        style = {"Línea (radiografía)": "line", "Limpio (solo líneas)": "clean",
-                 "Blueprint (gris suave)": "blueprint",
-                 "Diagrama (fondo blanco)": "diagram"}[style_label]
-        thickness = c5.slider("Grosor de líneas", 1, 6, 2, 1, key=f"{key}_thick")
-        display_w = c6.slider("Tamaño en pantalla (px)", 480, 1400, 980, 20,
-                              key=f"{key}_disp")
-        c7, c8 = st.columns(2)
-        zoom = c7.slider("Encuadre", 1.0, 3.0, 2.0, 0.1, key=f"{key}_zoom")
-        layer_alpha = c8.slider("Opacidad de capas", 0.05, 0.70, 0.25, 0.05,
-                                key=f"{key}_alpha")
-        with st.expander("Capas de hueso"):
+        with st.expander("Escala y visualizacion", expanded=False):
+            if mm_per_px:
+                st.caption(f"DICOM · {mm_per_px:.4f} mm/px")
+                use_mm, ref_bone, ref_width_mm = True, None, None
+            else:
+                use_mm = st.toggle("Escala aproximada", value=True, key=f"{key}_usemm")
+                ref_bone = (st.radio("Hueso de referencia", ("Tibia", "Fémur"),
+                                     horizontal=True, key=f"{key}_refbone") if use_mm else None)
+                ref_width_mm = (st.number_input("Ancho de referencia (mm)", 20.0, 140.0,
+                                                80.0, 1.0, key=f"{key}_refw") if use_mm else None)
+            style_label = st.selectbox(
+                "Estilo",
+                ("Línea (radiografía)", "Limpio (solo líneas)",
+                 "Blueprint (gris suave)", "Diagrama (fondo blanco)"),
+                key=f"{key}_style",
+            )
+            style = {"Línea (radiografía)": "line", "Limpio (solo líneas)": "clean",
+                     "Blueprint (gris suave)": "blueprint",
+                     "Diagrama (fondo blanco)": "diagram"}[style_label]
+            thickness = st.slider("Grosor de líneas", 1, 6, 2, 1, key=f"{key}_thick")
+            display_w = st.slider("Tamaño en pantalla (px)", 480, 1400, 980, 20,
+                                  key=f"{key}_disp")
+            zoom = st.slider("Encuadre", 1.0, 3.0, 2.0, 0.1, key=f"{key}_zoom")
+            layer_alpha = st.slider("Opacidad de capas", 0.05, 0.70, 0.25, 0.05,
+                                    key=f"{key}_alpha")
             show_prox = st.toggle("Hueso proximal", value=False, key=f"{key}_prox")
             show_dist = st.toggle("Hueso distal", value=False, key=f"{key}_dist")
             show_res = st.toggle("Hueso resecado", value=False, key=f"{key}_res")
 
-    st.caption(
-        "Pivote: donde el eje mecánico cruza la línea articular. La profundidad se mide "
-        "sobre ese eje y **0° es perpendicular a ese eje**, así que a 0° cada cóndilo "
-        "recibe una profundidad distinta según la anatomía.  **−** varo · **+** valgo."
-    )
+        st.markdown(
+            '<div style="font-size:.72rem;color:#8a93a3;margin:.2rem 0 .6rem;">'
+            '0° = perpendicular al eje mecánico · '
+            '<b>−</b> varo · <b>+</b> valgo</div>',
+            unsafe_allow_html=True,
+        )
 
-    unit = "mm" if use_mm else "px"
-    cut_settings = {}
-    for bone in ("Tibia", "Femur"):
-        c_on, c_ang, c_dep = st.columns([1.1, 3, 2], vertical_alignment="bottom")
-        visible = c_on.toggle(bone, value=True, key=f"{key}_on_{bone}")
-        angle = c_ang.slider("Ángulo (°)", -15.0, 15.0, 5.0, 0.5, key=f"{key}_ang_{bone}")
-        if unit == "mm":
-            dep = c_dep.slider("Profundidad (mm)", 0.0, 30.0, 8.0, 0.5,
-                               key=f"{key}_dep_{bone}")
-        else:
-            dep = c_dep.slider("Profundidad (px)", 0.0, 400.0, 100.0, 5.0,
-                               key=f"{key}_dep_{bone}")
-        cut_settings[bone] = {"visible": visible, "angle": angle, "depth": dep}
+        unit = "mm" if use_mm else "px"
+        cut_settings = {}
+        for bone in ("Tibia", "Femur"):
+            with st.container(border=True):
+                visible = st.toggle(bone, value=True, key=f"{key}_on_{bone}")
+                c_ang, c_dep = st.columns(2, gap="small")
+                angle = c_ang.slider("Ángulo (°)", -15.0, 15.0, 5.0, 0.5,
+                                     key=f"{key}_ang_{bone}")
+                c_ang.markdown(
+                    '<div style="display:flex;justify-content:space-between;'
+                    'font-size:.68rem;color:#8a93a3;margin-top:-.65rem;">'
+                    '<span>← Varo</span><span>Valgo →</span></div>',
+                    unsafe_allow_html=True,
+                )
+                if unit == "mm":
+                    dep = c_dep.slider("Prof. (mm)", 0.0, 30.0, 8.0, 0.5,
+                                       key=f"{key}_dep_{bone}")
+                else:
+                    dep = c_dep.slider("Prof. (px)", 0.0, 400.0, 100.0, 5.0,
+                                       key=f"{key}_dep_{bone}")
+            cut_settings[bone] = {"visible": visible, "angle": angle, "depth": dep}
 
     points = {k: list(v) for k, v in (sides_found.get(side, {}) or {}).get("points", {}).items()}
     if not points:
@@ -287,7 +295,8 @@ def render_simulator(image: np.ndarray, payload: dict, mm_per_px: Optional[float
             st.warning(f"{bone}: no se pudo simular ({exc}).")
 
     if not sims:
-        st.error("Activa al menos un hueso con puntos válidos.")
+        with col_img:
+            st.error("Activa al menos un hueso con puntos validos.")
         return
 
     sim = sims[0][1]
@@ -308,42 +317,43 @@ def render_simulator(image: np.ndarray, payload: dict, mm_per_px: Optional[float
     zoom_y = zoom_x * 0.62
     bx0, by0, bx1, by1 = sim_lib.crop_bounds(crop_ref, image.shape, zoom_x, zoom_y)
     crop = _crop(painted, bx0, by0, bx1, by1)
-    if crop.size == 0:
-        st.error("El recorte quedó vacío; ajusta el encuadre.")
-        return
 
-    factor = min(float(display_w) / crop.shape[1], 6.0)
-    if abs(factor - 1.0) > 1e-3:
-        crop = cv2.resize(
-            crop,
-            (int(round(crop.shape[1] * factor)), int(round(crop.shape[0] * factor))),
-            interpolation=cv2.INTER_AREA if factor < 1.0 else cv2.INTER_CUBIC,
+    with col_img:
+        if crop.size == 0:
+            st.error("El recorte quedo vacio; ajusta el encuadre.")
+            return
+        factor = min(float(display_w) / crop.shape[1], 6.0)
+        if abs(factor - 1.0) > 1e-3:
+            crop = cv2.resize(
+                crop,
+                (int(round(crop.shape[1] * factor)), int(round(crop.shape[0] * factor))),
+                interpolation=cv2.INTER_AREA if factor < 1.0 else cv2.INTER_CUBIC,
+            )
+            factor = crop.shape[1] / float(max(1, bx1 - bx0))
+
+        disp_sims = [(b, sim_lib.scale_sim(s, bx0, by0, factor)) for b, s in sims]
+        line_w = max(1, int(round(thickness * crop.shape[1] / 900.0)))
+        overlay = crop
+        if show_axes:
+            overlay = sim_lib.draw_mechanical_axes(
+                overlay, [s for _, s in disp_sims], thickness=max(1, line_w - 1))
+        for bone, ds in disp_sims:
+            overlay = sim_lib.draw_cut_overlay(
+                overlay, ds, line_thickness=line_w,
+                fill_wedge=(not show_res) and len(sims) == 1,
+                style=style, show_values=False, color=BONE_COLORS[bone],
+            )
+        overlay = sim_lib.draw_hud(
+            overlay, [(b.upper(), s, BONE_COLORS[b]) for b, s in disp_sims],
+            badge=f"{side}  /  {' + '.join(b for b, _ in sims)}",
         )
-        factor = crop.shape[1] / float(max(1, bx1 - bx0))
+        st.image(_bgr_to_pil(overlay, int(display_w)), width=int(overlay.shape[1]))
 
-    disp_sims = [(b, sim_lib.scale_sim(s, bx0, by0, factor)) for b, s in sims]
-    line_w = max(1, int(round(thickness * crop.shape[1] / 900.0)))
-    overlay = crop
-    if show_axes:
-        overlay = sim_lib.draw_mechanical_axes(
-            overlay, [s for _, s in disp_sims], thickness=max(1, line_w - 1))
-    for bone, ds in disp_sims:
-        overlay = sim_lib.draw_cut_overlay(
-            overlay, ds, line_thickness=line_w,
-            fill_wedge=(not show_res) and len(sims) == 1,
-            style=style, show_values=False, color=BONE_COLORS[bone],
-        )
-    overlay = sim_lib.draw_hud(
-        overlay, [(b.upper(), s, BONE_COLORS[b]) for b, s in disp_sims],
-        badge=f"{side}  /  {' + '.join(b for b, _ in sims)}",
-    )
-    st.image(_bgr_to_pil(overlay, int(display_w)), width=int(overlay.shape[1]))
-
-    if not scale_mm_per_px:
-        st.caption("Sin calibración milimétrica: las cifras están en píxeles.")
-    elif calibration_source and "compartida" in str(calibration_source):
-        st.caption(f"Calibración aproximada: {calibration_source} · "
-                   f"{scale_mm_per_px:.4f} mm/px aplicada a los dos cortes.")
+        if not scale_mm_per_px:
+            st.caption("Sin calibracion milimetrica: las cifras estan en pixeles.")
+        elif calibration_source and "compartida" in str(calibration_source):
+            st.caption(f"Calibracion aproximada: {calibration_source} · "
+                       f"{scale_mm_per_px:.4f} mm/px aplicada a los dos cortes.")
 
     # ------------------------------ detalle ------------------------------
     col_a, col_b = st.columns(2, gap="medium")

@@ -413,24 +413,47 @@ def render_simulator(image: np.ndarray, payload: dict, mm_per_px: Optional[float
                         "radius": rad, "fill": "rgba(48,125,226,0.30)",
                         "stroke": "#307DE2", "strokeWidth": 2, "name": str(i),
                     } for i in idxs]
-                    canvas = st_canvas(
-                        fill_color="rgba(48,125,226,0.30)", stroke_width=2,
-                        stroke_color="#307DE2",
-                        background_image=_bgr_to_pil(bg, cw),
-                        update_streamlit=True, height=int(bg.shape[0]), width=int(cw),
-                        drawing_mode="transform",
-                        initial_drawing={"version": "4.4.0", "objects": objs},
-                        key=f"{key}_canvas_{edit_id}_{group}",
-                    )
-                    st.caption("Arrastra los círculos · " + " · ".join(f"P{i}" for i in idxs))
-                    c_ap, c_rs = st.columns(2)
-                    if c_ap.button("Aplicar", width="stretch", key=f"{key}_apply_{group}"):
-                        store = st.session_state.sim_point_overrides.setdefault(edit_id, {})
-                        for idx, obj in zip(idxs, (canvas.json_data or {}).get("objects", [])):
-                            r_obj = float(obj.get("radius", rad))
-                            store[idx] = ((obj["left"] + r_obj) / sc + x0,
-                                          (obj["top"] + r_obj) / sc + y0)
-                        st.rerun()
-                    if c_rs.button("Restablecer", width="stretch", key=f"{key}_reset_{group}"):
-                        st.session_state.sim_point_overrides.pop(edit_id, None)
-                        st.rerun()
+                    canvas = None
+                    try:
+                        canvas = st_canvas(
+                            fill_color="rgba(48,125,226,0.30)", stroke_width=2,
+                            stroke_color="#307DE2",
+                            background_image=_bgr_to_pil(bg, cw),
+                            update_streamlit=True, height=int(bg.shape[0]), width=int(cw),
+                            drawing_mode="transform",
+                            initial_drawing={"version": "4.4.0", "objects": objs},
+                            key=f"{key}_canvas_{edit_id}_{group}",
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        st.caption(
+                            f"Arrastre no disponible con esta version de "
+                            f"streamlit-drawable-canvas ({type(exc).__name__}). "
+                            "Ajusta las coordenadas en la tabla."
+                        )
+                        plain = st.data_editor(
+                            [{"Punto": f"P{i}",
+                              "x (px)": round(float(points[str(i)][0]), 1),
+                              "y (px)": round(float(points[str(i)][1]), 1)} for i in idxs],
+                            hide_index=True, width="stretch",
+                            key=f"{key}_nums_{edit_id}_{group}",
+                        )
+                        if st.button("Aplicar coordenadas", width="stretch",
+                                     key=f"{key}_applynum_{group}"):
+                            store = st.session_state.sim_point_overrides.setdefault(edit_id, {})
+                            for row in plain:
+                                idx = int(str(row["Punto"]).lstrip("P"))
+                                store[idx] = (float(row["x (px)"]), float(row["y (px)"]))
+                            st.rerun()
+                    if canvas is not None:
+                        st.caption("Arrastra los círculos · " + " · ".join(f"P{i}" for i in idxs))
+                        c_ap, c_rs = st.columns(2)
+                        if c_ap.button("Aplicar", width="stretch", key=f"{key}_apply_{group}"):
+                            store = st.session_state.sim_point_overrides.setdefault(edit_id, {})
+                            for idx, obj in zip(idxs, (canvas.json_data or {}).get("objects", [])):
+                                r_obj = float(obj.get("radius", rad))
+                                store[idx] = ((obj["left"] + r_obj) / sc + x0,
+                                              (obj["top"] + r_obj) / sc + y0)
+                            st.rerun()
+                        if c_rs.button("Restablecer", width="stretch", key=f"{key}_reset_{group}"):
+                            st.session_state.sim_point_overrides.pop(edit_id, None)
+                            st.rerun()

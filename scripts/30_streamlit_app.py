@@ -558,6 +558,112 @@ if "canvas_version" not in st.session_state:
     st.session_state.canvas_version = 0
 
 # ---------------------------------------------------------------------------
+# Guia de uso (ventana inicial)
+# ---------------------------------------------------------------------------
+GUIDE_CSS = """
+<style>
+.guia-paso { display: flex; gap: 11px; align-items: flex-start; margin: 0 0 9px 0; }
+.guia-num { flex: 0 0 24px; height: 24px; border-radius: 50%; background: #307DE2;
+    color: #fff; font-size: 12px; font-weight: 700; display: flex;
+    align-items: center; justify-content: center; }
+.guia-txt { font-size: 13.5px; color: #33415c; line-height: 1.5; }
+.guia-txt b { color: #0f172a; }
+.guia-card { border: 1px solid #e8eaee; border-radius: 12px; padding: 10px 13px;
+    background: #fff; height: 100%; }
+.guia-card h4 { margin: 0 0 5px 0; font-size: 14px; color: #0f172a; }
+.guia-card p { margin: 0; font-size: 12.5px; color: #5b6472; line-height: 1.5; }
+.guia-h { font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .8px; color: #307DE2; margin: 4px 0 7px 0; }
+.guia-nota { font-size: 12.5px; color: #5b6472; line-height: 1.5; margin: 0 0 6px 0; }
+.guia-nota b { color: #0f172a; }
+/* La guia puede ser mas alta que la pantalla: se le da scroll propio para que
+   el borde superior y el boton final siempre sean alcanzables. */
+div[role="dialog"] { max-height: 88vh !important; overflow-y: auto !important; }
+</style>
+"""
+
+
+@st.dialog("Cómo usar la app", width="large")
+def _guide_dialog() -> None:
+    """Explica el flujo de uso. No documenta instalación ni ejecución."""
+    st.markdown(GUIDE_CSS, unsafe_allow_html=True)
+    st.markdown(
+        '<p class="guia-nota">De la radiografía a las métricas en tres pasos. '
+        'Los valores por defecto ya funcionan.</p>',
+        unsafe_allow_html=True,
+    )
+
+    pasos = [
+        (
+            "Sube la radiografía",
+            'AP de rodilla o pierna completa. Con <b>DICOM</b> la escala real viene '
+            'incluida; también puedes pegar con <b>Ctrl+V</b>.',
+        ),
+        (
+            "Pulsa «▶ Cálculo Ejes»",
+            'Detecta cadera, rodilla y tobillo, ubica los ocho puntos anatómicos y '
+            'calcula <b>LDFA, MPTA, aHKA, HKA y JLO</b> por lado.',
+        ),
+        (
+            "Lee el resultado y verifícalo",
+            'Cada lado muestra su clasificación <b>CPAK</b>. Comprueba que Cadera, Rodilla '
+            'y Tobillo estén en ✓ y que los puntos caigan donde corresponde.',
+        ),
+    ]
+    for numero, (titulo, texto) in enumerate(pasos, start=1):
+        st.markdown(
+            f'<div class="guia-paso"><div class="guia-num">{numero}</div>'
+            f'<div class="guia-txt"><b>{titulo}</b><br>{texto}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="guia-h">Las dos vistas</div>', unsafe_allow_html=True)
+    col_inf, col_sim = st.columns(2, gap="medium")
+    with col_inf:
+        st.markdown(
+            '<div class="guia-card"><h4>Inferencia</h4>'
+            '<p>Overlay con zonas, ejes y puntos, métricas por lado, zoom por articulación '
+            'y descarga del JSON.</p></div>',
+            unsafe_allow_html=True,
+        )
+    with col_sim:
+        st.markdown(
+            '<div class="guia-card"><h4>Simulador de cortes</h4>'
+            '<p>Corte tibial y femoral sobre la misma imagen: ángulo, profundidad en mm, '
+            'varo o valgo y cuna resultante.</p></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        '<div class="guia-h">Milímetros: de dónde salen</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="guia-nota"><b>DICOM:</b> escala automática desde PixelSpacing, visible bajo '
+        'el resultado. <b>PNG, JPG o pantallazo:</b> declara el ancho tibial en «Escala y '
+        'visualización» o mide dos puntos con «Calibración». Sin calibración, los cortes van '
+        'en píxeles.</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="guia-nota" style="margin-top:8px"><b>Antes de confiar en una cifra:</b> '
+        'los tres chequeos completos en ambos lados, AP verdadera (la rotación altera el ancho '
+        'articular) y la nota de calibración revisada.</p>',
+        unsafe_allow_html=True,
+    )
+
+    st.caption(
+        "Demo de investigación · sin datos identificables de pacientes · "
+        "no es un dispositivo médico certificado."
+    )
+
+    if st.button("Empezar", type="primary", width="stretch"):
+        st.session_state.guia_vista = True
+        st.session_state.guia_abrir = False
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
@@ -579,6 +685,10 @@ with st.sidebar:
     components.html(PASTE_HANDLER_HTML, height=0)
 
     run_btn = st.button("▶  Cálculo Ejes", use_container_width=True, type="primary")
+
+    if st.button("❓ Cómo usar la app", width="stretch", key="abrir_guia"):
+        st.session_state.guia_abrir = True
+        st.rerun()
 
     with st.expander("Modelos y parámetros", expanded=False):
         det_path = st.text_input("Detección (.pt)", value=str(pipeline.DEFAULT_DET_MODEL))
@@ -618,6 +728,14 @@ mode = st.segmented_control(
     label_visibility="collapsed",
     key="app_mode",
 ) or "Inferencia"
+
+# Guia de uso: se abre sola la primera vez de cada sesion y se puede reabrir
+# desde el boton del panel lateral.
+if "guia_vista" not in st.session_state:
+    st.session_state.guia_vista = False
+if st.session_state.get("guia_abrir") or not st.session_state.guia_vista:
+    st.session_state.guia_abrir = False
+    _guide_dialog()
 
 # ---------------------------------------------------------------------------
 # Run inference

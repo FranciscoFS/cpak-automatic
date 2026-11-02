@@ -12,7 +12,7 @@ ultralytics>=8.3.0
 
 # --- App ---
 streamlit==1.57.0
-streamlit-drawable-canvas
+streamlit-drawable-canvas==0.9.3
 Pillow
 numpy
 pandas

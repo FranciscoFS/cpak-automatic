@@ -53,6 +53,24 @@ try:
 except Exception:
     CANVAS_AVAILABLE = False
 
+
+# ---------------------------------------------------------------------------
+# Simulador de cortes (vista adicional sobre la misma imagen y los mismos puntos)
+# ---------------------------------------------------------------------------
+def _load_sim_ui():
+    path = Path(__file__).with_name("cut_simulator_ui.py")
+    if not path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("cpak_cut_simulator_ui", str(path))
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+sim_ui = _load_sim_ui()
+
 # ---------------------------------------------------------------------------
 # Pegado desde portapapeles (Ctrl+V)
 # Streamlit no soporta pegar imágenes en st.file_uploader. Este handler (en un
@@ -137,37 +155,38 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-/* Fondo principal más oscuro */
+/* Fondo principal claro */
 [data-testid="stAppViewContainer"] {
-    background-color: #0f1117;
+    background-color: #f6f7f9;
 }
 [data-testid="stSidebar"] {
-    background-color: #161b27;
+    background-color: #ffffff;
+    border-right: 1px solid #e8eaee;
 }
 
-/* Métricas más grandes */
+/* Métricas */
 [data-testid="stMetricValue"] {
     font-size: 24px !important;
     font-weight: 700 !important;
+    color: #0f172a !important;
 }
 [data-testid="stMetricLabel"] {
     font-size: 12px !important;
-    color: #8b9ab1 !important;
+    color: #8a93a3 !important;
 }
 
 /* Título principal */
 .cpak-title {
     font-size: 32px;
     font-weight: 800;
-    background: linear-gradient(90deg, #4f9cf9, #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    letter-spacing: -.02em;
+    color: #0f172a;
     margin-bottom: 4px;
 }
 .cpak-subtitle {
     font-size: 14px;
-    color: #8b9ab1;
-    margin-bottom: 24px;
+    color: #6b7280;
+    margin-bottom: 18px;
 }
 
 /* Tarjeta de clasificación CPAK */
@@ -196,15 +215,15 @@ st.markdown(
 /* Panel de detecciones */
 .det-pill {
     display: inline-block;
-    background: #1e2535;
-    color: #c8d0e0;
+    background: #eef2f8;
+    color: #33415c;
     border-radius: 20px;
     padding: 3px 10px;
     font-size: 12px;
     margin: 2px;
 }
 .det-missing {
-    color: #e06c75;
+    color: #d14343;
 }
 </style>
 """,
@@ -324,19 +343,27 @@ def fit_for_display(image, max_side: int = 1600):
     return image.resize(new_size, Image.LANCZOS)
 
 
-def image_as_html(image, max_side: int = 1400, quality: int = 85) -> str:
+def image_as_html(image, max_side: int = 1800, quality: int = 88,
+                  min_display_width: int = 900) -> str:
     """Devuelve la imagen como <img> con data-URI.
 
     Evita el endpoint /media/ de Streamlit: si ese endpoint falla (HTTP 500 en
     el despliegue), la imagen se sigue viendo porque viaja dentro del propio HTML.
+    Las capturas de baja resolución se amplían para que no queden diminutas, y el
+    CSS nunca estira más allá del tamaño natural (`max-width: 100%`).
     """
     small = fit_for_display(image, max_side=max_side)
+    width, height = small.size
+    if width < min_display_width:
+        up = min(3.0, min_display_width / float(width))
+        small = small.resize((int(round(width * up)), int(round(height * up))), Image.LANCZOS)
     buffer = BytesIO()
     small.save(buffer, format="JPEG", quality=quality)
     payload = base64.b64encode(buffer.getvalue()).decode("ascii")
     return (
         '<img src="data:image/jpeg;base64,' + payload + '" '
-        'style="width:100%;height:auto;border-radius:10px;display:block;" />'
+        'style="max-width:100%;max-height:86vh;width:auto;height:auto;'
+        'border-radius:10px;display:block;" />'
     )
 
 
@@ -582,6 +609,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if sim_ui is not None:
+    sim_ui.inject_theme()
+
+mode = st.segmented_control(
+    "Vista",
+    ("Inferencia", "Simulador de cortes"),
+    default="Inferencia",
+    label_visibility="collapsed",
+    key="app_mode",
+) or "Inferencia"
+
 # ---------------------------------------------------------------------------
 # Run inference
 # ---------------------------------------------------------------------------
@@ -632,6 +670,25 @@ if run_btn:
             st.success("Inferencia completada ✓")
         except Exception as exc:
             st.error(f"Error: {exc}")
+
+# ---------------------------------------------------------------------------
+# Vista: simulador de cortes
+# ---------------------------------------------------------------------------
+if mode == "Simulador de cortes":
+    if sim_ui is None:
+        st.error("Falta `cut_simulator_ui.py` junto a esta app.")
+        st.stop()
+    _img = st.session_state.get("image_path")
+    _payload = st.session_state.get("payload")
+    if not _img or not _payload:
+        st.info("Carga una imagen y pulsa «Ejecutar inferencia» para habilitar el simulador.")
+        st.stop()
+    _img_bgr = cv2.imdecode(np.fromfile(str(_img), dtype=np.uint8), cv2.IMREAD_COLOR)
+    if _img_bgr is None:
+        st.error("No se pudo leer la imagen para el simulador.")
+        st.stop()
+    sim_ui.render_simulator(_img_bgr, _payload, key="sim")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # Results

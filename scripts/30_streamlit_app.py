@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import tempfile
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -344,13 +345,13 @@ def fit_for_display(image, max_side: int = 1600):
 
 
 def image_as_html(image, max_side: int = 1800, quality: int = 88,
-                  min_display_width: int = 900) -> str:
+                  min_display_width: int = 900, display_width: int = 760) -> str:
     """Devuelve la imagen como <img> con data-URI.
 
     Evita el endpoint /media/ de Streamlit: si ese endpoint falla (HTTP 500 en
     el despliegue), la imagen se sigue viendo porque viaja dentro del propio HTML.
-    Las capturas de baja resolución se amplían para que no queden diminutas, y el
-    CSS nunca estira más allá del tamaño natural (`max-width: 100%`).
+    Las capturas de baja resolución se amplían para que no queden diminutas y el
+    ancho en pantalla lo decide `display_width` (nunca estira más allá de eso).
     """
     small = fit_for_display(image, max_side=max_side)
     width, height = small.size
@@ -362,8 +363,8 @@ def image_as_html(image, max_side: int = 1800, quality: int = 88,
     payload = base64.b64encode(buffer.getvalue()).decode("ascii")
     return (
         '<img src="data:image/jpeg;base64,' + payload + '" '
-        'style="max-width:100%;max-height:86vh;width:auto;height:auto;'
-        'border-radius:10px;display:block;" />'
+        f'style="max-width:min(100%,{int(display_width)}px);height:auto;'
+        'border-radius:10px;display:block;margin:0 auto;" />'
     )
 
 
@@ -569,7 +570,7 @@ with st.sidebar:
     st.markdown('<div class="sidebar-section">Imagen</div>', unsafe_allow_html=True)
     uploaded = st.file_uploader(
         "Seleccionar Rx",
-        type=["png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp"],
+        type=["png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp", "dcm", "dicom"],
         label_visibility="collapsed",
     )
     st.caption("💡 También puedes pegar una imagen con **Ctrl+V** (p. ej. un pantallazo).")
@@ -587,6 +588,8 @@ with st.sidebar:
     padding = st.slider("Padding BB (%)", 0.0, 0.50, 0.15, 0.05)
 
     st.markdown('<div class="sidebar-section">Capas de visualización</div>', unsafe_allow_html=True)
+    st.slider("Tamaño del overlay (px)", 400, 1400, 760, 20, key="overlay_w",
+              help="Ancho con que se muestra el overlay en la vista de inferencia.")
     show_boxes = st.checkbox("Bounding Boxes", value=True)
     show_axes = st.checkbox("Ejes anatómicos", value=True)
     show_mikulicz = st.checkbox("Línea de Mikulicz", value=False)
@@ -635,9 +638,26 @@ if run_btn:
             except OSError:
                 pass
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded.name).suffix) as tmp:
-            tmp.write(uploaded.read())
-            tmp_path = Path(tmp.name)
+        # DICOM: se decodifica con el cargador del simulador (ventana, inversion,
+        # PixelSpacing) y se guarda como PNG para el pipeline.
+        name_lower = Path(uploaded.name).name.lower()
+        is_dicom = name_lower.endswith((".dcm", ".dicom"))
+        if is_dicom:
+            try:
+                info = sim_ui.load_geometry().load_image(uploaded.getvalue(), uploaded.name)
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"No se pudo leer el DICOM: {exc}")
+                st.stop()
+            st.session_state.dicom_mm_per_px = info.get("mm_per_px")
+            png_path = Path(tempfile.gettempdir()) / f"cpak_dicom_{int(time.time()*1000)}.png"
+            cv2.imencode(".png", info["image"])[1].tofile(str(png_path))
+            tmp_path = png_path
+        else:
+            st.session_state.dicom_mm_per_px = None
+            with tempfile.NamedTemporaryFile(delete=False,
+                                             suffix=Path(uploaded.name).suffix) as tmp:
+                tmp.write(uploaded.read())
+                tmp_path = Path(tmp.name)
 
         try:
             with st.spinner("Ejecutando pipeline…"):
@@ -687,7 +707,8 @@ if mode == "Simulador de cortes":
     if _img_bgr is None:
         st.error("No se pudo leer la imagen para el simulador.")
         st.stop()
-    sim_ui.render_simulator(_img_bgr, _payload, key="sim")
+    sim_ui.render_simulator(_img_bgr, _payload,
+                            mm_per_px=st.session_state.get("dicom_mm_per_px"), key="sim")
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -713,7 +734,9 @@ if st.session_state.ran_once and st.session_state.payload is not None:
 
     # ── Overlay a ancho completo ──────────────────────────────
     st.markdown("### 🖼️ Overlay")
-    st.markdown(image_as_html(overlay, max_side=1800), unsafe_allow_html=True)
+    st.markdown(image_as_html(overlay, max_side=1800,
+                              display_width=int(st.session_state.get("overlay_w", 760))),
+                unsafe_allow_html=True)
 
     # ── Layout: métricas | zoom | controles ──
     col_left, col_center, col_right = st.columns([1.5, 1.6, 1], gap="large")

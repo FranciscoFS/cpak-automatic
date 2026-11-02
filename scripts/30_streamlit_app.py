@@ -578,30 +578,26 @@ with st.sidebar:
     # Escucha el pegado desde el portapapeles e inyecta la imagen en el uploader.
     components.html(PASTE_HANDLER_HTML, height=0)
 
-    st.markdown('<div class="sidebar-section">Modelos</div>', unsafe_allow_html=True)
-    det_path = st.text_input("Detección (.pt)", value=str(pipeline.DEFAULT_DET_MODEL))
-    pose_path = st.text_input("Pose (.pt)", value=str(pipeline.DEFAULT_POSE_MODEL))
+    run_btn = st.button("▶  Cálculo Ejes", use_container_width=True, type="primary")
 
-    st.markdown('<div class="sidebar-section">Parámetros</div>', unsafe_allow_html=True)
-    det_conf = st.slider("Detection conf", 0.0, 1.0, 0.20, 0.05)
-    pose_conf = st.slider("Pose conf", 0.0, 1.0, 0.20, 0.05)
-    padding = st.slider("Padding BB (%)", 0.0, 0.50, 0.15, 0.05)
-
-    st.markdown('<div class="sidebar-section">Capas de visualización</div>', unsafe_allow_html=True)
-    st.slider("Tamaño del overlay (px)", 400, 1400, 760, 20, key="overlay_w",
-              help="Ancho con que se muestra el overlay en la vista de inferencia.")
-    show_boxes = st.checkbox("Bounding Boxes", value=True)
-    show_axes = st.checkbox("Ejes anatómicos", value=True)
-    show_mikulicz = st.checkbox("Línea de Mikulicz", value=False)
-    line_thickness = st.slider("Grosor líneas", 1, 10, 2, 1)
-    summary_text_scale = st.slider("Tamaño métricas resumen", 0.4, 3.5, 1.0, 0.05)
-    der_offset_x = st.slider("Mover resumen Der X", -400, 400, 400, 5)
-    der_offset_y = st.slider("Mover resumen Der Y", -400, 400, 5, 5)
-    izq_offset_x = st.slider("Mover resumen Izq X", -400, 400, -400, 5)
-    izq_offset_y = st.slider("Mover resumen Izq Y", -400, 400, -400, 5)
-
-    st.markdown("---")
-    run_btn = st.button("▶  Ejecutar inferencia", use_container_width=True, type="primary")
+    with st.expander("Modelos y parámetros", expanded=False):
+        det_path = st.text_input("Detección (.pt)", value=str(pipeline.DEFAULT_DET_MODEL))
+        pose_path = st.text_input("Pose (.pt)", value=str(pipeline.DEFAULT_POSE_MODEL))
+        det_conf = st.slider("Detection conf", 0.0, 1.0, 0.20, 0.05)
+        pose_conf = st.slider("Pose conf", 0.0, 1.0, 0.20, 0.05)
+        padding = st.slider("Padding BB (%)", 0.0, 0.50, 0.15, 0.05)
+        st.markdown("**Visualización**")
+        st.slider("Tamaño del overlay (px)", 400, 1400, 760, 20, key="overlay_w",
+                  help="Ancho con que se muestra el overlay en la vista de inferencia.")
+        show_boxes = st.checkbox("Bounding Boxes", value=True)
+        show_axes = st.checkbox("Ejes anatómicos", value=True)
+        show_mikulicz = st.checkbox("Línea de Mikulicz", value=False)
+        line_thickness = st.slider("Grosor líneas", 1, 10, 2, 1)
+        summary_text_scale = st.slider("Tamaño métricas resumen", 0.4, 3.5, 1.0, 0.05)
+        der_offset_x = st.slider("Mover resumen Der X", -400, 400, 400, 5)
+        der_offset_y = st.slider("Mover resumen Der Y", -400, 400, 5, 5)
+        izq_offset_x = st.slider("Mover resumen Izq X", -400, 400, -400, 5)
+        izq_offset_y = st.slider("Mover resumen Izq Y", -400, 400, -400, 5)
 
 # ---------------------------------------------------------------------------
 # Header
@@ -701,7 +697,7 @@ if mode == "Simulador de cortes":
     _img = st.session_state.get("image_path")
     _payload = st.session_state.get("payload")
     if not _img or not _payload:
-        st.info("Carga una imagen y pulsa «Ejecutar inferencia» para habilitar el simulador.")
+        st.info("Carga una imagen y pulsa «Cálculo Ejes» para habilitar el simulador.")
         st.stop()
     _img_bgr = cv2.imdecode(np.fromfile(str(_img), dtype=np.uint8), cv2.IMREAD_COLOR)
     if _img_bgr is None:
@@ -732,17 +728,17 @@ if st.session_state.ran_once and st.session_state.payload is not None:
         izq_offset_xy=(izq_offset_x, izq_offset_y),
     )
 
-    # ── Overlay a ancho completo ──────────────────────────────
-    st.markdown("### 🖼️ Overlay")
-    st.markdown(image_as_html(overlay, max_side=1800,
-                              display_width=int(st.session_state.get("overlay_w", 760))),
-                unsafe_allow_html=True)
+    # ── Layout: imagen | resultados ───────────────────────────────────────
+    col_img, col_res = st.columns([2.1, 1], gap="large")
 
-    # ── Layout: métricas | zoom | controles ──
-    col_left, col_center, col_right = st.columns([1.5, 1.6, 1], gap="large")
+    with col_img:
+        st.markdown("### 🖼️ Overlay")
+        st.markdown(image_as_html(overlay, max_side=1800,
+                                  display_width=int(st.session_state.get("overlay_w", 760))),
+                    unsafe_allow_html=True)
 
     # ── Métricas ──────────────────────────────────────────────────────────
-    with col_left:
+    with col_res:
         st.markdown("### 📊 Métricas")
 
         for side in ["Der", "Izq"]:
@@ -793,8 +789,8 @@ if st.session_state.ran_once and st.session_state.payload is not None:
             else:
                 st.warning(f"⚠ {m.get('status', 'datos incompletos')}")
 
-    # ── Imagen central ─────────────────────────────────────────────────────
-    with col_center:
+    # ── Zoom por articulación (bajo la imagen) ─────────────────────────────
+    with col_img:
 
         # Zoom por articulación
         with st.expander("🔍 Zoom por articulación", expanded=st.session_state.get("zoom_edit_mode", False)):
@@ -954,8 +950,8 @@ if st.session_state.ran_once and st.session_state.payload is not None:
             else:
                 st.info(f"No se detectó {z_joint} ({z_side})")
 
-    # ── Panel derecho ───────────────────────────────────────────────────────
-    with col_right:
+    # ── Panel de información (bajo las métricas) ───────────────────────────
+    with col_res:
         st.markdown("### 🎛️ Info")
 
         summary_label = "📝 Mostrar resumen en imagen"
@@ -1011,7 +1007,7 @@ else:
         """
         <div style="text-align:center;padding:80px 0;color:#8b9ab1;">
             <div style="font-size:60px;">🦴</div>
-            <div style="font-size:18px;margin-top:16px;">Carga una imagen Rx y presiona <b>Ejecutar inferencia</b></div>
+            <div style="font-size:18px;margin-top:16px;">Carga una imagen Rx y presiona <b>Cálculo Ejes</b></div>
             <div style="font-size:13px;margin-top:8px;">Usa el panel lateral para configurar los modelos y parámetros</div>
         </div>
         """,

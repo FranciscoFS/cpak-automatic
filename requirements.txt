@@ -17,5 +17,14 @@ Pillow
 numpy
 pandas
 
+# --- DICOM ---
+# pydicom es imprescindible para leer .dcm (antes no estaba y el uploader fallaba).
+pydicom>=3.0.0
+# PACS suele exportar Rx comprimidas: sin estos plugins pydicom no puede
+# decodificar el pixel data y la carga falla.
+pylibjpeg>=2.0
+pylibjpeg-libjpeg>=2.4
+pylibjpeg-openjpeg>=2.6
+
 # NOTA: no se lista opencv-python porque ultralytics ya lo trae como dependencia.
 # El Space necesita libGL del sistema: ver packages.txt

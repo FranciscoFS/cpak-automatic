@@ -144,8 +144,7 @@ PIPELINE_PATH = BASE_DIR / "scripts" / "13_final_inference.py"
 # Page config (must be first Streamlit call)
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="CPAK · Inferencia Clínica",
-    page_icon="🦴",
+    page_title="Calculadora de Ejes AutoCPAK",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -712,7 +711,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
-st.markdown('<div class="cpak-title">🦴 CPAK · Inferencia Clínica</div>', unsafe_allow_html=True)
+st.markdown('<div class="cpak-title">Calculadora de Ejes AutoCPAK</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="cpak-subtitle">Detección de zonas · Keypoints anatómicos · LDFA / MPTA / aHKA / JLO</div>',
     unsafe_allow_html=True,
@@ -1129,9 +1128,8 @@ else:
     # Estado inicial
     st.markdown(
         """
-        <div style="text-align:center;padding:80px 0;color:#8b9ab1;">
-            <div style="font-size:60px;">🦴</div>
-            <div style="font-size:18px;margin-top:16px;">Carga una imagen Rx y presiona <b>Cálculo Ejes</b></div>
+        <div style="text-align:center;padding:90px 0;color:#8b9ab1;">
+            <div style="font-size:18px;">Carga una imagen Rx y presiona <b>Cálculo Ejes</b></div>
             <div style="font-size:13px;margin-top:8px;">Usa el panel lateral para configurar los modelos y parámetros</div>
         </div>
         """,

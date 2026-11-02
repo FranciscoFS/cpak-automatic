@@ -403,6 +403,45 @@ def _mono_to_bgr(array: np.ndarray, photometric: str = "MONOCHROME2") -> np.ndar
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
 
+def _dicom_pixels(dataset, name: str) -> Tuple[np.ndarray, str]:
+    """Devuelve la matriz 2D a mostrar y una nota sobre lo que se hizo.
+
+    Contempla las tres formas en que llega una Rx DICOM: monocroma de un cuadro,
+    monocroma multiframe (Rx largas empalmadas) y RGB en color.
+    """
+    try:
+        array = dataset.pixel_array
+    except Exception as exc:  # noqa: BLE001
+        tsuid = str(getattr(getattr(dataset, "file_meta", None), "TransferSyntaxUID", "") or "")
+        pista = ""
+        if any(clave in tsuid for clave in ("1.2.840.10008.1.2.4.9", "1.2.840.10008.1.2.4.8",
+                                           "1.2.840.10008.1.2.4.5", "1.2.840.10008.1.2.4.4",
+                                           "1.2.840.10008.1.2.4.80", "1.2.840.10008.1.2.4.81",
+                                           "1.2.840.10008.1.2.4.90", "1.2.840.10008.1.2.4.91")):
+            pista = (
+                " Es un DICOM comprimido: instala pylibjpeg-libjpeg (JPEG) "
+                "o pylibjpeg-openjpeg (JPEG 2000)."
+            )
+        raise ValueError(
+            f"DICOM sin imagen decodificable ({name}). "
+            f"TransferSyntax: {tsuid or 'desconocida'}.{pista} Detalle: {exc}"
+        ) from exc
+
+    nota = ""
+    samples = int(getattr(dataset, "SamplesPerPixel", 1) or 1)
+    frames = int(getattr(dataset, "NumberOfFrames", 1) or 1)
+
+    if array.ndim == 3 and samples >= 3:
+        nota = "color"
+        rgb = np.asarray(array[..., :3])
+        return rgb, nota
+    if array.ndim == 3:
+        indice = frames // 2 if frames > 1 else 0
+        nota = f"multiframe {frames}, cuadro {indice + 1}"
+        return np.asarray(array[indice]), nota
+    return np.asarray(array), nota
+
+
 def load_image(source, filename: Optional[str] = None) -> dict:
     """Carga una imagen desde ruta o bytes y detecta la calibracion disponible.
 
@@ -424,47 +463,59 @@ def load_image(source, filename: Optional[str] = None) -> dict:
     if looks_dicom:
         try:
             import pydicom  # import local: el modulo funciona sin pydicom en PNG
+        except ImportError as exc:
+            raise RuntimeError(
+                "No se puede leer DICOM: falta el paquete pydicom en este entorno. "
+                "Agrega 'pydicom' a requirements.txt."
+            ) from exc
 
+        try:
             dataset = pydicom.dcmread(BytesIO(raw), force=True)
-            array = dataset.pixel_array
-            photometric = str(getattr(dataset, "PhotometricInterpretation", "MONOCHROME2"))
-            slope = float(getattr(dataset, "RescaleSlope", 1.0) or 1.0)
-            intercept = float(getattr(dataset, "RescaleIntercept", 0.0) or 0.0)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"DICOM ilegible ({name}): {exc}") from exc
 
-            if array.ndim == 2:
-                image = _mono_to_bgr(array.astype(np.float32) * slope + intercept, photometric)
-            else:
-                rgb = np.asarray(array[..., :3])
-                if rgb.dtype != np.uint8:
-                    rgb = cv2.normalize(rgb.astype(np.float32), None, 0, 255, cv2.NORM_MINMAX)
-                image = cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)
+        array, nota_pixeles = _dicom_pixels(dataset, name)
+        slope = float(getattr(dataset, "RescaleSlope", 1.0) or 1.0)
+        intercept = float(getattr(dataset, "RescaleIntercept", 0.0) or 0.0)
+        photometric = str(getattr(dataset, "PhotometricInterpretation", "MONOCHROME2"))
 
-            spacing = getattr(dataset, "PixelSpacing", None)
-            mm_per_px = None
-            if spacing is not None and len(spacing) >= 2:
-                mm_per_px = float((float(spacing[0]) + float(spacing[1])) / 2.0)
+        if nota_pixeles == "color":
+            rgb = array.astype(np.float32) * slope + intercept
+            rgb = cv2.normalize(rgb, None, 0, 255, cv2.NORM_MINMAX)
+            image = cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)
+        else:
+            image = _mono_to_bgr(array.astype(np.float32) * slope + intercept, photometric)
 
-            note = "DICOM"
-            if mm_per_px:
-                note += f" · PixelSpacing {mm_per_px:.4f} mm/px"
-            else:
-                note += " · sin PixelSpacing"
-            return {
-                "image": image,
-                "mm_per_px": mm_per_px,
-                "source": "dicom",
-                "note": note,
-                "name": name,
-            }
-        except Exception as exc:  # noqa: BLE001 - se intenta como raster
-            fallback_note = f"no se pudo leer como DICOM ({exc}); se intenta raster"
-    else:
-        fallback_note = ""
+        spacing = getattr(dataset, "PixelSpacing", None)
+        origen_escala = "PixelSpacing"
+        if spacing is None or len(spacing) < 2:
+            # En DX/CR el espaciado del paciente a veces solo viene como
+            # ImagerPixelSpacing, que esta medido en el detector.
+            spacing = getattr(dataset, "ImagerPixelSpacing", None)
+            origen_escala = "ImagerPixelSpacing (plano del detector, revisar magnificacion)"
+        mm_per_px = None
+        if spacing is not None and len(spacing) >= 2:
+            mm_per_px = float((float(spacing[0]) + float(spacing[1])) / 2.0)
+
+        nota = "DICOM"
+        if mm_per_px:
+            nota += f" · {origen_escala} {mm_per_px:.4f} mm/px"
+        else:
+            nota += " · sin PixelSpacing"
+        if nota_pixeles and nota_pixeles != "color":
+            nota += f" · {nota_pixeles}"
+        return {
+            "image": image,
+            "mm_per_px": mm_per_px,
+            "source": "dicom",
+            "note": nota,
+            "name": name,
+        }
 
     image = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError(f"No se pudo decodificar la imagen: {name}")
-    note = "imagen raster · sin escala" if not fallback_note else fallback_note
+    note = "imagen raster · sin escala"
     return {
         "image": image,
         "mm_per_px": None,

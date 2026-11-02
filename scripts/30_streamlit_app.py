@@ -642,14 +642,18 @@ if run_btn:
             try:
                 info = sim_ui.load_geometry().load_image(uploaded.getvalue(), uploaded.name)
             except Exception as exc:  # noqa: BLE001
-                st.error(f"No se pudo leer el DICOM: {exc}")
+                # El cargador ya devuelve un mensaje accionable (falta pydicom,
+                # DICOM comprimido, archivo ilegible): no se le agrega prefijo.
+                st.error(str(exc))
                 st.stop()
             st.session_state.dicom_mm_per_px = info.get("mm_per_px")
+            st.session_state.dicom_note = info.get("note")
             png_path = Path(tempfile.gettempdir()) / f"cpak_dicom_{int(time.time()*1000)}.png"
             cv2.imencode(".png", info["image"])[1].tofile(str(png_path))
             tmp_path = png_path
         else:
             st.session_state.dicom_mm_per_px = None
+            st.session_state.dicom_note = None
             with tempfile.NamedTemporaryFile(delete=False,
                                              suffix=Path(uploaded.name).suffix) as tmp:
                 tmp.write(uploaded.read())
@@ -684,6 +688,8 @@ if run_btn:
             st.session_state.image_path = tmp_path
             st.session_state.ran_once = True
             st.success("Inferencia completada ✓")
+            if st.session_state.get("dicom_note"):
+                st.caption(f"🩻 {st.session_state.dicom_note}")
         except Exception as exc:
             st.error(f"Error: {exc}")
 

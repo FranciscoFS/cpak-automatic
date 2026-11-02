@@ -7,7 +7,9 @@ Expone dos cosas:
 La geometria vive en `cut_simulator.py`; aqui solo hay interfaz.
 """
 
+import base64
 import importlib.util
+import io
 from pathlib import Path
 from typing import Optional
 
@@ -94,6 +96,23 @@ def _bgr_to_pil(canvas: np.ndarray, max_width: int = 1400):
     return Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
 
 
+def _inline_image_html(canvas: np.ndarray, display_w: int, quality: int = 90) -> str:
+    """Imagen como data-URI embebido.
+
+    Evita el endpoint /media/ de Streamlit, que en Streamlit Cloud responde 500
+    con overlays grandes y deja la imagen rota.
+    """
+    pil = _bgr_to_pil(canvas, int(display_w))
+    buf = io.BytesIO()
+    pil.save(buf, format="JPEG", quality=quality, optimize=True)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return (
+        f'<img src="data:image/jpeg;base64,{b64}" '
+        f'style="width:100%;max-width:{int(display_w)}px;height:auto;'
+        f'border-radius:10px;display:block;margin:0 auto;" />'
+    )
+
+
 def _crop(img: np.ndarray, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
     return img[max(0, y0):max(0, y1), max(0, x0):max(0, x1)]
 
@@ -150,7 +169,7 @@ def _calibration_dialog(img, pts, scale_mm_per_px, source, active_bone, sim_lib)
                     (255, 255, 255), max(1, int(round(2 * f_txt))), cv2.LINE_AA)
         mark = " · referencia" if bone == active_bone else ""
         st.markdown(f"**{bone}**{mark}")
-        st.image(_bgr_to_pil(crop, int(target_w)), width=int(crop.shape[1]))
+        st.html(_inline_image_html(crop, int(target_w)))
 
     if scale_mm_per_px:
         st.success(f"Escala en uso: {scale_mm_per_px:.4f} mm/px"
@@ -347,7 +366,7 @@ def render_simulator(image: np.ndarray, payload: dict, mm_per_px: Optional[float
             overlay, [(b.upper(), s, BONE_COLORS[b]) for b, s in disp_sims],
             badge=f"{side}  /  {' + '.join(b for b, _ in sims)}",
         )
-        st.image(_bgr_to_pil(overlay, int(display_w)), width=int(overlay.shape[1]))
+        st.html(_inline_image_html(overlay, int(display_w)))
 
         if not scale_mm_per_px:
             st.caption("Sin calibracion milimetrica: las cifras estan en pixeles.")
